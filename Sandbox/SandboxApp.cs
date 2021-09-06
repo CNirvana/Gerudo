@@ -96,6 +96,11 @@ namespace Sandbox
             }
 
             camera.Transform.Position = position;
+
+            if (Input.Keyboard.GetKeyDown(Key.Escape))
+            {
+                Exit();
+            }
         }
 
         protected override void Cleanup()

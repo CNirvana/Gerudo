@@ -19,6 +19,8 @@ namespace Gerudo
 
         private List<ISubSystem> _subSystems = new List<ISubSystem>();
 
+        private bool _isRunning;
+
         private void Startup()
         {
             Instance = this;
@@ -53,6 +55,7 @@ namespace Gerudo
             Stopwatch sw = Stopwatch.StartNew();
             double previousElapsed = sw.Elapsed.TotalSeconds;
 
+            _isRunning = true;
             while (Window.Exist)
             {
                 double newElapsed = sw.Elapsed.TotalSeconds;
@@ -68,6 +71,11 @@ namespace Gerudo
                     Update(deltaTime);
 
                     RenderSystem.Render(Scene);
+
+                    if (_isRunning == false)
+                    {
+                        Window.NativeWindow.Close();
+                    }
                 }
             }
 
@@ -115,6 +123,11 @@ namespace Gerudo
 
             _subSystems.Add(RenderSystem);
             _subSystems.Add(AssetManagementSystem);
+        }
+
+        protected void Exit()
+        {
+            _isRunning = false;
         }
     }
 }
