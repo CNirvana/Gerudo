@@ -8,6 +8,10 @@ namespace Gerudo
         public Matrix4x4 viewMatrix;
 
         public Matrix4x4 projectionMatrix;
+
+        public RgbaFloat lightColor;
+
+        public Vector4 lightDirection;
     }
 
     public class PerFrameBuffer : UniformBuffer<PerFrameData>

@@ -17,11 +17,11 @@ namespace Gerudo
         private static void CreatePerFrameBuffer(GraphicsDevice device, ResourceFactory factory)
         {
             var layout = factory.CreateResourceLayout(new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription("PerFrameBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+                new ResourceLayoutElementDescription("PerFrameBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment)));
 
             BufferDescription desc = new BufferDescription()
             {
-                SizeInBytes = 32 * 4,
+                SizeInBytes = (16 + 16 + 4 + 4) * 4,
                 Usage = BufferUsage.UniformBuffer
             };
             var buffer = factory.CreateBuffer(desc);

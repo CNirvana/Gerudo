@@ -25,6 +25,8 @@ namespace Gerudo
         {
             Instance = this;
 
+            Logger.Initialize();
+
             WindowCreateInfo windowCI = new WindowCreateInfo()
             {
                 X = 50,
@@ -90,6 +92,8 @@ namespace Gerudo
             {
                 _subSystems[i].Shutdown();
             }
+
+            Logger.Shutdown();
         }
 
         protected virtual void Initialize()

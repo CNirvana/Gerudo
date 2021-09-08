@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using System.Text;
 using Veldrid;
 using Veldrid.SPIRV;
@@ -43,7 +44,9 @@ namespace Gerudo
             var perFrameData = new PerFrameData
             {
                 viewMatrix = cameraData.viewMatrix,
-                projectionMatrix = cameraData.projectionMatrix
+                projectionMatrix = cameraData.projectionMatrix,
+                lightColor = scene.MainLight.LightColor,
+                lightDirection = new Vector4(scene.MainLight.Direction, 0)
             };
             GlobalBuffers.PerFrameBuffer.Update(_commandList, perFrameData);
 

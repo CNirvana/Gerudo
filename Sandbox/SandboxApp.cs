@@ -20,14 +20,14 @@ namespace Sandbox
 
         protected override void Initialize()
         {
-            var model = AssetManager.LoadAsset<Model>("Assets/viking_room.obj");
-            var texture = AssetManager.LoadAsset<Texture2D>("Assets/viking_room.png");
+            var model = AssetManager.LoadAsset<Model>("Assets/Drone/Drone.fbx");
+            var texture = AssetManager.LoadAsset<Texture2D>("Assets/Drone/Drone_diff.jpg");
 
             _renderer = new Renderer
             {
                 Model = model,
                 //Mesh = mesh,
-                Transform = new Transform(),
+                Transform = new Transform() { Scale = Vector3.One * 0.01f},
                 Material = new Material(texture)
             };
 
