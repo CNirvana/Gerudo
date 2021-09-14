@@ -11,8 +11,6 @@ namespace Gerudo
                 .WriteTo.Console()
                 .WriteTo.File("log.log")
                 .CreateLogger();
-
-            Log.Information("Hello, world!");
         }
 
         internal static void Shutdown()

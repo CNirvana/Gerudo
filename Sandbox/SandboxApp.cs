@@ -1,13 +1,12 @@
 using System.Numerics;
 using Gerudo;
+using Gerudo.ECS;
 using Veldrid;
 
 namespace Sandbox
 {
     public class SandboxApp : Engine
     {
-        private Renderer _renderer;
-
         private float _moveSpeed = 1.0f;
 
         private float _fastMoveSpeed = 10f;
@@ -18,12 +17,16 @@ namespace Sandbox
 
         private float _pitch;
 
+        private World _world;
+
+        private SystemManager _systemManager;
+
         protected override void Initialize()
         {
             var model = AssetManager.LoadAsset<Model>("Assets/Drone/Drone.fbx");
             var texture = AssetManager.LoadAsset<Texture2D>("Assets/Drone/Drone_diff.jpg");
 
-            _renderer = new Renderer
+            var renderer = new Renderer
             {
                 Model = model,
                 //Mesh = mesh,
@@ -31,7 +34,7 @@ namespace Sandbox
                 Material = new Material(texture)
             };
 
-            Scene.AddRenderer(_renderer);
+            Scene.AddRenderer(renderer);
 
             var quadModel = new Model();
             quadModel.meshes.Add(CreateQuad());
@@ -43,10 +46,16 @@ namespace Sandbox
             };
 
             Scene.AddRenderer(quadRenderer);
+
+            _world = new World();
+            _systemManager = new SystemManager(_world);
+            _systemManager.Add(new UpdateSystem()).Init();
         }
 
         protected override void Update(float deltaTime)
         {
+            _systemManager.Update();
+
             var camera = Scene.Camera;
 
             if (Input.Mouse.GetButton(MouseButton.Right))
@@ -103,8 +112,22 @@ namespace Sandbox
             }
         }
 
+        protected override void OnGUI()
+        {
+        }
+
         protected override void Cleanup()
         {
+            if (_systemManager != null)
+            {
+                _systemManager.Destroy();
+                _systemManager = null;
+            }
+            if (_world != null)
+            {
+                _world.Destroy();
+                _world = null;
+            }
         }
 
         private Mesh CreateQuad()
@@ -119,6 +142,34 @@ namespace Sandbox
             ushort[] indices = { 0, 2, 1, 2, 3, 1 };
 
             return Mesh.Create(vertices, indices);
+        }
+
+        struct TagComponent :IComponent
+        {
+        }
+
+        class UpdateSystem : IInitSystem, IUpdateSystem, IDestroySystem
+        {
+            public void Init(SystemManager systems)
+            {
+                var world = systems.GetWorld();
+                var entity = world.CreateEntity();
+                entity.AddComp<TagComponent>();
+            }
+
+            public void Update(SystemManager systems)
+            {
+                var world = systems.GetWorld();
+                var filter = world.Filter<TagComponent>().End();
+
+                foreach (var entity in filter)
+                {
+                }
+            }
+
+            public void Destroy(SystemManager systems)
+            {
+            }
         }
     }
 }

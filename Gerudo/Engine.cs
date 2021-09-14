@@ -17,7 +17,7 @@ namespace Gerudo
 
         public Scene Scene { get; private set; }
 
-        private List<ISubSystem> _subSystems = new List<ISubSystem>();
+        private List<ISubModule> _subModules = new List<ISubModule>();
 
         private bool _isRunning;
 
@@ -31,18 +31,18 @@ namespace Gerudo
             {
                 X = 50,
                 Y = 50,
-                WindowWidth = 1920,
-                WindowHeight = 1080,
+                WindowWidth = 1280,
+                WindowHeight = 720,
                 WindowTitle = "Gerudo",
                 WindowInitialState = WindowState.Normal
             };
             Window = new Window(windowCI);
 
-            InitializeSubSystems();
+            InitializeSubModules();
 
-            foreach (var subSystem in _subSystems)
+            foreach (var subModule in _subModules)
             {
-                subSystem.Startup();
+                subModule.Startup();
             }
 
             Scene = new Scene();
@@ -74,6 +74,8 @@ namespace Gerudo
 
                     RenderSystem.Render(Scene);
 
+                    OnGUI();
+
                     if (_isRunning == false)
                     {
                         Window.NativeWindow.Close();
@@ -88,9 +90,9 @@ namespace Gerudo
 
         private void Shutdown()
         {
-            for (int i = _subSystems.Count - 1; i >= 0; --i)
+            for (int i = _subModules.Count - 1; i >= 0; --i)
             {
-                _subSystems[i].Shutdown();
+                _subModules[i].Shutdown();
             }
 
             Logger.Shutdown();
@@ -105,12 +107,16 @@ namespace Gerudo
         {
         }
 
+        protected virtual void OnGUI()
+        {
+        }
+
         protected virtual void Cleanup()
         {
 
         }
 
-        private void InitializeSubSystems()
+        private void InitializeSubModules()
         {
             GraphicsDeviceOptions options = new GraphicsDeviceOptions
             {
@@ -125,8 +131,8 @@ namespace Gerudo
 
             AssetManagementSystem = new AssetManagementSystem();
 
-            _subSystems.Add(RenderSystem);
-            _subSystems.Add(AssetManagementSystem);
+            _subModules.Add(RenderSystem);
+            _subModules.Add(AssetManagementSystem);
         }
 
         protected void Exit()

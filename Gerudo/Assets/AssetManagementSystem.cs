@@ -1,6 +1,6 @@
 namespace Gerudo
 {
-    public class AssetManagementSystem : ISubSystem
+    public class AssetManagementSystem : ISubModule
     {
         public void Startup()
         {

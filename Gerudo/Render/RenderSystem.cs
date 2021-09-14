@@ -6,7 +6,7 @@ using Veldrid.SPIRV;
 
 namespace Gerudo
 {
-    public class RenderSystem : ISubSystem
+    public class RenderSystem : ISubModule
     {
         public GraphicsDevice Device { get; private set; }
 

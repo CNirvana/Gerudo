@@ -1,6 +1,6 @@
 namespace Gerudo
 {
-    public interface ISubSystem
+    public interface ISubModule
     {
         void Startup();
 
