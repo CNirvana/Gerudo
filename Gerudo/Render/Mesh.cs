@@ -3,42 +3,29 @@ using Veldrid;
 
 namespace Gerudo
 {
-    public class Mesh : IDisposable
+    public abstract class Mesh : IDisposable
     {
-        public Vertex[] Vertices { get; private set; }
+        public abstract uint IndexCount { get; }
 
-        public ushort[] Indices { get; private set; }
+        internal DeviceBuffer VertexBuffer { get; set; }
 
-        public DeviceBuffer VertexBuffer { get; private set; }
+        internal DeviceBuffer IndexBuffer { get; set; }
 
-        public DeviceBuffer IndexBuffer { get; private set; }
+        internal abstract void UpdateBuffer(GraphicsDevice device);
 
-        internal Mesh(Vertex[] vertices, ushort[] indices)
+        internal Mesh() { }
+
+        internal virtual void Draw(CommandList commandList)
         {
-            this.Vertices = vertices;
-            this.Indices = indices;
-        }
+            commandList.SetVertexBuffer(0, VertexBuffer);
+            commandList.SetIndexBuffer(IndexBuffer, IndexFormat.UInt16);
 
-        public static Mesh Create(Vertex[] vertices, ushort[] indices)
-        {
-            var mesh = new Mesh(vertices, indices);
-            mesh.UpdateBuffer(Engine.Instance.RenderSystem.Device);
-            return mesh;
-        }
-
-        internal void UpdateBuffer(GraphicsDevice device)
-        {
-            BufferDescription vbDescription = new BufferDescription(
-                (uint)Vertices.Length * Vertex.SizeInBytes,
-                BufferUsage.VertexBuffer);
-            VertexBuffer = device.ResourceFactory.CreateBuffer(vbDescription);
-            device.UpdateBuffer(VertexBuffer, 0, Vertices);
-
-            BufferDescription ibDescription = new BufferDescription(
-                (uint)Indices.Length * sizeof(ushort),
-                BufferUsage.IndexBuffer);
-            IndexBuffer = device.ResourceFactory.CreateBuffer(ibDescription);
-            device.UpdateBuffer(IndexBuffer, 0, Indices);
+            commandList.DrawIndexed(
+                indexCount: IndexCount,
+                instanceCount: 1,
+                indexStart: 0,
+                vertexOffset: 0,
+                instanceStart: 0);
         }
 
         public void Dispose()

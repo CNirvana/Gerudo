@@ -18,9 +18,24 @@ namespace Gerudo
             Log.CloseAndFlush();
         }
 
-        public static void Debug(string message)
+        public static void LogInfo(string message)
         {
             Log.Debug(message);
+        }
+
+        public static void LogWarning(string message)
+        {
+            Log.Warning(message);
+        }
+
+        public static void LogError(string message)
+        {
+            Log.Error(message);
+        }
+
+        public static void LogFatal(string message)
+        {
+            Log.Fatal(message);
         }
     }
 }

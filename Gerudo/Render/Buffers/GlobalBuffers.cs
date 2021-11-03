@@ -8,25 +8,28 @@ namespace Gerudo
 
         public static PerDrawBuffer PerDrawBuffer { get; private set; }
 
-        internal static void Initialize(GraphicsDevice device)
+        public static BoneDataBuffer BoneDataBuffer { get; private set; }
+
+        internal static void Initialize()
         {
-            CreatePerFrameBuffer(device, device.ResourceFactory);
-            CreatePerDrawBuffer(device, device.ResourceFactory);
+            CreatePerFrameBuffer();
+            CreatePerDrawBuffer();
+            CreateBoneDataBuffer();
         }
 
-        private static void CreatePerFrameBuffer(GraphicsDevice device, ResourceFactory factory)
+        private static void CreatePerFrameBuffer()
         {
-            var layout = factory.CreateResourceLayout(new ResourceLayoutDescription(
+            var layout = GraphicsContext.Factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("PerFrameBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment)));
 
             BufferDescription desc = new BufferDescription()
             {
                 SizeInBytes = (16 + 16 + 4 + 4) * 4,
-                Usage = BufferUsage.UniformBuffer
+                Usage = BufferUsage.UniformBuffer | BufferUsage.Dynamic
             };
-            var buffer = factory.CreateBuffer(desc);
+            var buffer = GraphicsContext.Factory.CreateBuffer(desc);
 
-            var set = factory.CreateResourceSet(new ResourceSetDescription(
+            var set = GraphicsContext.Factory.CreateResourceSet(new ResourceSetDescription(
                 layout,
                 buffer
             ));
@@ -34,19 +37,19 @@ namespace Gerudo
             PerFrameBuffer = new PerFrameBuffer(layout, buffer, set);
         }
 
-        private static void CreatePerDrawBuffer(GraphicsDevice device, ResourceFactory factory)
+        private static void CreatePerDrawBuffer()
         {
-            var layout = factory.CreateResourceLayout(new ResourceLayoutDescription(
+            var layout = GraphicsContext.Factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("PerDrawBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
 
             BufferDescription desc = new BufferDescription()
             {
                 SizeInBytes = 16 * 4,
-                Usage = BufferUsage.UniformBuffer
+                Usage = BufferUsage.UniformBuffer | BufferUsage.Dynamic
             };
-            var buffer = factory.CreateBuffer(desc);
+            var buffer = GraphicsContext.Factory.CreateBuffer(desc);
 
-            var set = factory.CreateResourceSet(new ResourceSetDescription(
+            var set = GraphicsContext.Factory.CreateResourceSet(new ResourceSetDescription(
                 layout,
                 buffer
             ));
@@ -54,10 +57,32 @@ namespace Gerudo
             PerDrawBuffer = new PerDrawBuffer(layout, buffer, set);
         }
 
+        private static void CreateBoneDataBuffer()
+        {
+            var layout = GraphicsContext.Factory.CreateResourceLayout(new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription("BonesBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)
+            ));
+
+            BufferDescription desc = new BufferDescription()
+            {
+                SizeInBytes = 64 * 64,
+                Usage = BufferUsage.UniformBuffer | BufferUsage.Dynamic
+            };
+            var buffer = GraphicsContext.Factory.CreateBuffer(desc);
+
+            var set = GraphicsContext.Factory.CreateResourceSet(new ResourceSetDescription(
+                layout,
+                buffer
+            ));
+
+            BoneDataBuffer = new BoneDataBuffer(layout, buffer, set);
+        }
+
         public static void Cleanup()
         {
             PerFrameBuffer.Dispose();
             PerDrawBuffer.Dispose();
+            BoneDataBuffer.Dispose();
         }
     }
 }

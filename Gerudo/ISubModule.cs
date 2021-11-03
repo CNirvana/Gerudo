@@ -2,9 +2,9 @@ namespace Gerudo
 {
     public interface ISubModule
     {
-        void Startup();
+        bool Startup();
 
-        void Update();
+        void Update(float deltaTime);
 
         void Shutdown();
     }

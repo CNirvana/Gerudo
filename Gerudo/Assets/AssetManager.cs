@@ -1,25 +1,17 @@
-using System;
-using System.Collections.Generic;
-
 namespace Gerudo
 {
-    public static class AssetManager
+    public class AssetManager
     {
-        private static Dictionary<Type, IAssetLoader> _loaders = new Dictionary<Type, IAssetLoader>();
-
-        public static T LoadAsset<T>(string path) where T : IAsset
+        public bool Startup()
         {
-            if (_loaders.TryGetValue(typeof(T), out var loader))
-            {
-                return (T)loader.Load(path);
-            }
+            AssetDatabase.AddLoader(typeof(Model), new ModelLoader());
+            AssetDatabase.AddLoader(typeof(Texture2D), new Texture2DLoader());
 
-            return default(T);
+            return true;
         }
 
-        internal static void AddLoader(Type type, IAssetLoader loader)
+        public void Shutdown()
         {
-            _loaders.Add(type, loader);
         }
     }
 }

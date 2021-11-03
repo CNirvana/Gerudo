@@ -12,29 +12,28 @@ namespace Gerudo
 
         internal ResourceSet ResourceSet { get; private set; }
 
+        internal DeviceBuffer BoneBuffer { get; private set; }
+
         public Material(Texture2D mainTexture)
         {
             this.MainTexture = mainTexture;
 
-            var device = Engine.Instance.RenderSystem.Device;
-            var factory = device.ResourceFactory;
-
             ShaderDescription vertexShaderDesc = new ShaderDescription(
                 ShaderStages.Vertex,
-                Encoding.UTF8.GetBytes(Shaders.COLOR_VERT),
+                Encoding.UTF8.GetBytes(Shaders.ANIMATED_VERT),
                 "main");
             ShaderDescription fragmentShaderDesc = new ShaderDescription(
                 ShaderStages.Fragment,
                 Encoding.UTF8.GetBytes(Shaders.COLOR_FRAG),
                 "main");
 
-            var shaders = factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+            var shaders = GraphicsContext.Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
 
-            var layout = factory.CreateResourceLayout(new ResourceLayoutDescription(
+            var layout = GraphicsContext.Factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("MainSampler", ResourceKind.Sampler, ShaderStages.Fragment)));
 
-            this.ResourceSet = factory.CreateResourceSet(new ResourceSetDescription(
+            this.ResourceSet = GraphicsContext.Factory.CreateResourceSet(new ResourceSetDescription(
                 layout, mainTexture.View, mainTexture.Sampler));
 
             GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription();
@@ -51,18 +50,19 @@ namespace Gerudo
                 scissorTestEnabled: false);
             pipelineDescription.PrimitiveTopology = PrimitiveTopology.TriangleList;
             pipelineDescription.ShaderSet = new ShaderSetDescription(
-                vertexLayouts: new VertexLayoutDescription[] { Vertex.Layout },
+                vertexLayouts: new VertexLayoutDescription[] { SkeletalVertex.Layout },
                 shaders: shaders);
             pipelineDescription.ResourceLayouts = new[] {
                 GlobalBuffers.PerFrameBuffer.Layout,
                 GlobalBuffers.PerDrawBuffer.Layout,
-                layout };
+                layout,
+                GlobalBuffers.BoneDataBuffer.Layout };
             pipelineDescription.Outputs = new OutputDescription(
                 new OutputAttachmentDescription(PixelFormat.D24_UNorm_S8_UInt),
                 new [] { new OutputAttachmentDescription(PixelFormat.B8_G8_R8_A8_UNorm) }
             );
 
-            Pipeline = factory.CreateGraphicsPipeline(pipelineDescription);
+            Pipeline = GraphicsContext.Factory.CreateGraphicsPipeline(pipelineDescription);
         }
 
         // public MaterialInstance CreateInstance()

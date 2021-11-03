@@ -1,366 +1,284 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
-namespace Gerudo.ECS
+namespace Gerudo
 {
-    public sealed class World
+    public class World
     {
-        internal EntityData[] _entityDatas;
+        public string Name { get; private set; }
 
-        private int _entitiesCount;
+        private WorldConfig _config;
+
+        private EntityData[] _entities;
+
+        private int _entityCount;
 
         private int[] _recycledEntities;
 
-        private int _recycledEntitiesCount;
+        private int _recycledEntityCount;
 
-        private IComponentPool[] _componentPools;
+        private IComponentArray[] _componentArrays;
 
-        private int _poolsCount;
+        private SystemManager _systemManager;
 
-        private readonly int _poolDenseSize;
+        private Dictionary<EntityMask, EntityFilter> _filters;
 
-        private readonly Dictionary<Type, IComponentPool> _poolHashes;
+        public static int ComponentTypeCount => ComponentTypes.Count;
 
-        private readonly Dictionary<int, ComponentFilter> _hashedFilters;
+        public static List<Type> ComponentTypes { get; private set; }
 
-        private readonly List<ComponentFilter> _allFilters;
-
-        private List<ComponentFilter>[] _filtersByIncludedComponents;
-
-        private List<ComponentFilter>[] _filtersByExcludedComponents;
-
-        private bool _destroyed;
-
-        public World(Config config = null)
+        static World()
         {
-            if (config == null)
+            ComponentTypes = new List<Type>();
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            foreach (var assembly in assemblies)
             {
-                config = new Config();
+                var types = assembly.GetTypes();
+                foreach (var type in types)
+                {
+                    if (type.IsValueType && typeof(IComponent).IsAssignableFrom(type))
+                    {
+                        ComponentTypes.Add(type);
+                    }
+                }
             }
+            if (ComponentTypeCount > 64)
+            {
+                // Current only support 64 types of component
+            }
+        }
 
-            // entities.
-            _entityDatas = new EntityData[config.defaultEntityCount];
-            _recycledEntities = new int[config.defaultEntityCount];
-            _entitiesCount = 0;
-            _recycledEntitiesCount = 0;
+        public World(WorldConfig config)
+        {
+            _entities = new EntityData[config.defaultEntityCapacity];
+            _entityCount = 0;
+            _recycledEntities = new int[config.defaultRecycledEntityCapacity];
+            _componentArrays = new IComponentArray[ComponentTypeCount];
 
-            // pools.
-            _componentPools = new IComponentPool[config.defaultPoolCount];
-            _poolHashes = new Dictionary<Type, IComponentPool> (config.defaultPoolCount);
-            _filtersByIncludedComponents = new List<ComponentFilter>[config.defaultPoolCount];
-            _filtersByExcludedComponents = new List<ComponentFilter>[config.defaultPoolCount];
-            _poolsCount = 0;
+            _systemManager = new SystemManager();
 
-            // filters.
-            _hashedFilters = new Dictionary<int, ComponentFilter>(config.defaultFilterCount);
-            _allFilters = new List<ComponentFilter>(config.defaultFilterCount);
-            _poolDenseSize = config.defaultPoolDenseCount;
+            _filters = new Dictionary<EntityMask, EntityFilter>();
+        }
 
-            _destroyed = false;
+        public void Initialize()
+        {
+            _systemManager.Initialize(this);
+        }
+
+        public void Update(float deltaTime)
+        {
+            _systemManager.Update(this, deltaTime);
         }
 
         public void Destroy()
         {
-            _destroyed = true;
-            for (var i = _entitiesCount - 1; i >= 0; i--)
+            _systemManager.Destroy(this);
+
+            for (int i = _entityCount - 1; i >= 0; i--)
             {
-                ref var entityData = ref _entityDatas[i];
-                if (entityData.componentCount > 0)
+                if (_entities[i].version > 0)
                 {
-                    DeleteEntity(i);
+                    DestroyEntityInternal(i);
                 }
             }
-
-            _componentPools = null;
-            _poolHashes.Clear();
-            _hashedFilters.Clear();
-            _allFilters.Clear();
-            _filtersByIncludedComponents = null;
-            _filtersByExcludedComponents = null;
         }
 
-        public bool IsAlive()
-        {
-            return !_destroyed;
-        }
-
-        public Entity CreateEntity(string name = "")
+        public Entity CreateEntity()
         {
             Entity entity;
-            if (_recycledEntitiesCount > 0)
+            if (_recycledEntityCount > 0)
             {
-                entity.id = _recycledEntities[--_recycledEntitiesCount];
-                ref var entityData = ref _entityDatas[entity.id];
+                int id = _recycledEntities[--_recycledEntityCount];
+                ref var entityData = ref _entities[id];
+                Debug.Assert(entityData.version < 0);
                 entityData.version = -entityData.version;
-                entityData.name = name;
+
+                entity.id = id;
                 entity.version = entityData.version;
             }
             else
             {
-                if (_entitiesCount == _entityDatas.Length)
+                if (_entityCount == _entities.Length)
                 {
-                    // resize entities and component pools.
-                    var newSize = _entitiesCount << 1;
-                    Array.Resize (ref _entityDatas, newSize);
-                    for (int i = 0, iMax = _poolsCount; i < iMax; i++)
-                    {
-                        _componentPools[i].Resize(newSize);
-                    }
-                    for (int i = 0, iMax = _allFilters.Count; i < iMax; i++)
-                    {
-                        _allFilters[i].ResizeSparseIndex(newSize);
-                    }
+                    Array.Resize(ref _entities, _entityCount << 1);
                 }
-                entity.id = _entitiesCount++;
-                ref var entityData = ref _entityDatas[entity.id];
-                entityData.version = 1;
-                entityData.name = name;
-                entity.version = entityData.version;
-            }
 
-            entity.world = this;
+                int id = _entityCount++;
+                _entities[id].version = 1;
+
+                entity.id = id;
+                entity.version = _entities[id].version;
+            }
 
             return entity;
         }
 
-        public void DeleteEntity(int entityId)
+        public void DestroyEntity(in Entity entity)
         {
-            ref var entityData = ref _entityDatas[entityId];
-            if (entityData.version < 0)
+#if DEBUG
+            if (entity.id < 0 || entity.id >= _entityCount)
             {
-                return;
+                // Log: "Entity {entity.id} has already destroyed!";
+            }
+#endif
+            DestroyEntityInternal(entity.id);
+        }
+
+        private void DestroyEntityInternal(int entityId)
+        {
+            ref var entityData = ref _entities[entityId];
+
+            while (!entityData.componentBitSet.Empty)
+            {
+                var compId = entityData.componentBitSet.RemoveLastBit();
+                var componentArray = _componentArrays[compId];
+                componentArray.Delete(entityId);
+            }
+            UpdateFilter(entityId, entityData.componentBitSet);
+
+            entityData.version = (entityData.version == int.MaxValue) ? -1 : -(entityData.version + 1);
+
+            if (_recycledEntityCount == _recycledEntities.Length)
+            {
+                Array.Resize(ref _recycledEntities, _recycledEntityCount << 1);
             }
 
-            // kill components.
-            if (entityData.componentCount > 0)
+            _recycledEntities[_recycledEntityCount++] = entityId;
+        }
+
+        public Entity GetEntity(int entityId)
+        {
+#if DEBUG
+            if (entityId < 0 || entityId >= _entityCount)
             {
-                var index = 0;
-                while (entityData.componentCount > 0 && index < _poolsCount)
+                // TODO:
+            }
+#endif
+            ref var entityData = ref _entities[entityId];
+            return new Entity { id = entityId, version = entityData.version };
+        }
+
+        public bool IsEntityAlive(in Entity entity)
+        {
+            ref var entityData = ref _entities[entity.id];
+            return entity.id >= 0 && entity.id < _entityCount && entityData.version > 0 && entityData.version == entity.version;
+        }
+
+        public ref TComp AddComp<TComp>(in Entity entity) where TComp : IComponent
+        {
+            ref var entityData = ref _entities[entity.id];
+#if DEBUG
+            if (entityData.componentBitSet.Get<TComp>())
+            {
+                // TODO: Log error
+            }
+#endif
+            entityData.componentBitSet.Set<TComp>();
+            UpdateFilter(entity.id, entityData.componentBitSet);
+
+            var componentArray = GetComponentArray<TComp>();
+            return ref componentArray.Add(entity.id);
+        }
+
+        public ref TComp GetComp<TComp>(in Entity entity) where TComp : IComponent
+        {
+            ref var entityData = ref _entities[entity.id];
+#if DEBUG
+            if (entityData.componentBitSet.Get<TComp>())
+            {
+                // TODO: Log error
+            }
+#endif
+            var componentArray = GetComponentArray<TComp>();
+            return ref componentArray.Get(entity.id);
+        }
+
+        public ref TComp GetOrAddComp<TComp>(in Entity entity) where TComp : IComponent
+        {
+            ref var entityData = ref _entities[entity.id];
+            var componentArray = GetComponentArray<TComp>();
+            if (!entityData.componentBitSet.Get<TComp>())
+            {
+                entityData.componentBitSet.Set<TComp>();
+                UpdateFilter(entity.id, entityData.componentBitSet);
+
+                return ref componentArray.Add(entity.id);
+            }
+
+            return ref componentArray.Get(entity.id);
+        }
+
+        public void DeleteComp<TComp>(in Entity entity) where TComp : IComponent
+        {
+            ref var entityData = ref _entities[entity.id];
+            if (entityData.componentBitSet.Get<TComp>())
+            {
+                entityData.componentBitSet.Reset<TComp>();
+                UpdateFilter(entity.id, entityData.componentBitSet);
+
+                var componentArray = GetComponentArray<TComp>();
+                componentArray.Delete(entity.id);
+            }
+        }
+
+        public bool HasComp<TComp>(in Entity entity) where TComp : IComponent
+        {
+            ref var entityData = ref _entities[entity.id];
+            return entityData.componentBitSet.Get<TComp>();
+        }
+
+        private void UpdateFilter(int entityId, in ComponentBitSet bitSet)
+        {
+            foreach (var pair in _filters)
+            {
+                if (bitSet.Empty || !pair.Key.IsCompatible(bitSet))
                 {
-                    for (; index < _poolsCount; index++)
+                    if (pair.Value.ContainsEntity(entityId))
                     {
-                        if (_componentPools[index].HasComp(entityId))
-                        {
-                            _componentPools[index++].DeleteComp(entityId);
-                            break;
-                        }
+                        pair.Value.RemoveEntity(entityId);
                     }
                 }
-#if DEBUG
-                if (entityData.componentCount != 0)
+                else
                 {
-                    throw new Exception ($"Invalid components count on entity {entityId} => {entityData.componentCount}.");
+                    if (!pair.Value.ContainsEntity(entityId))
+                    {
+                        pair.Value.AddEntity(entityId);
+                    }
                 }
-#endif
-                return;
             }
-
-            entityData.version = (entityData.version == int.MaxValue ? -1 : -(entityData.version + 1));
-            if (_recycledEntitiesCount == _recycledEntities.Length)
-            {
-                Array.Resize(ref _recycledEntities, _recycledEntitiesCount << 1);
-            }
-            _recycledEntities[_recycledEntitiesCount++] = entityId;
         }
 
-        public ComponentPool<T> GetPool<T>() where T : struct, IComponent
+        private ComponentArray<TComp> GetComponentArray<TComp>() where TComp : IComponent
         {
-            var poolType = typeof(ComponentPool<T>);
-            if (_poolHashes.TryGetValue(poolType, out var rawPool))
+            if (_componentArrays[ComponentType<TComp>.Id] == null)
             {
-                return (ComponentPool<T>) rawPool;
+                _componentArrays[ComponentType<TComp>.Id] = new ComponentArray<TComp>(512);
             }
-            var pool = new ComponentPool<T>(this, _poolsCount, _poolDenseSize, _entityDatas.Length);
-            _poolHashes[poolType] = pool;
-            if (_poolsCount == _componentPools.Length)
-            {
-                var newSize = _poolsCount << 1;
-                Array.Resize (ref _componentPools, newSize);
-                Array.Resize (ref _filtersByIncludedComponents, newSize);
-                Array.Resize (ref _filtersByExcludedComponents, newSize);
-            }
-            _componentPools[_poolsCount++] = pool;
-            return pool;
+
+            return (ComponentArray<TComp>)_componentArrays[ComponentType<TComp>.Id];
         }
 
-        public ComponentMask Filter<T>() where T : struct, IComponent
+        public EntityFilter GetFilter(EntityMask mask)
         {
-            return ComponentMask.New(this).Inc<T>();
-        }
-
-        internal bool IsEntityAliveInternal(in Entity entity)
-        {
-            ref var entityData = ref _entityDatas[entity.id];
-            return entity.id >= 0 && entity.id < _entitiesCount && entityData.version == entity.version;
-        }
-
-        internal (ComponentFilter, bool) GetFilterInternal(ComponentMask mask, int capacity = 512)
-        {
-            var hash = mask.Hash;
-            var exists = _hashedFilters.TryGetValue(hash, out var filter);
-            if (exists)
+            if (_filters.TryGetValue(mask, out var filter))
             {
-                return (filter, false);
+                return filter;
             }
 
-            filter = new ComponentFilter (this, mask, capacity, _entityDatas.Length);
-            _hashedFilters[hash] = filter;
-            _allFilters.Add(filter);
-
-            // add to component dictionaries for fast compatibility scan.
-            for (int i = 0, iMax = mask.IncludeCount; i < iMax; i++)
+            filter = new EntityFilter(this, mask, 512, _entities.Length);
+            for (int i = 0; i < _entityCount; i++)
             {
-                var list = _filtersByIncludedComponents[mask.Include[i]];
-                if (list == null)
-                {
-                    list = new List<ComponentFilter>(8);
-                    _filtersByIncludedComponents[mask.Include[i]] = list;
-                }
-                list.Add(filter);
-            }
-            for (int i = 0, iMax = mask.ExcludeCount; i < iMax; i++)
-            {
-                var list = _filtersByExcludedComponents[mask.Exclude[i]];
-                if (list == null)
-                {
-                    list = new List<ComponentFilter>(8);
-                    _filtersByExcludedComponents[mask.Exclude[i]] = list;
-                }
-                list.Add(filter);
-            }
-
-            // scan exist entities for compatibility with new filter.
-            for (int i = 0, iMax = _entitiesCount; i < iMax; i++)
-            {
-                ref var entityData = ref _entityDatas[i];
-                if (entityData.componentCount > 0 && IsMaskCompatible(mask, i))
+                ref var entityData = ref _entities[i];
+                if (entityData.version > 0 && mask.IsCompatible(entityData.componentBitSet))
                 {
                     filter.AddEntity(i);
                 }
             }
 
-            return (filter, true);
-        }
+            _filters.Add(mask, filter);
 
-        internal void OnEntityChange(int entity, int componentType, bool added)
-        {
-            var includeList = _filtersByIncludedComponents[componentType];
-            var excludeList = _filtersByExcludedComponents[componentType];
-            if (added)
-            {
-                // add component.
-                if (includeList != null)
-                {
-                    foreach (var filter in includeList)
-                    {
-                        if (IsMaskCompatible(filter.Mask, entity))
-                        {
-#if DEBUG
-                            if (filter.GetSparseEntities()[entity] > 0) { throw new Exception ("Entity already in filter."); }
-#endif
-                            filter.AddEntity(entity);
-                        }
-                    }
-                }
-                if (excludeList != null)
-                {
-                    foreach (var filter in excludeList)
-                    {
-                        if (IsMaskCompatibleWithout(filter.Mask, entity, componentType))
-                        {
-#if DEBUG
-                            if (filter.GetSparseEntities()[entity] == 0) { throw new Exception ("Entity not in filter."); }
-#endif
-                            filter.RemoveEntity(entity);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // remove component.
-                if (includeList != null)
-                {
-                    foreach (var filter in includeList)
-                    {
-                        if (IsMaskCompatible(filter.Mask, entity))
-                        {
-#if DEBUG
-                            if (filter.GetSparseEntities()[entity] == 0) { throw new Exception ("Entity not in filter."); }
-#endif
-                            filter.RemoveEntity(entity);
-                        }
-                    }
-                }
-                if (excludeList != null)
-                {
-                    foreach (var filter in excludeList)
-                    {
-                        if (IsMaskCompatibleWithout(filter.Mask, entity, componentType))
-                        {
-#if DEBUG
-                            if (filter.GetSparseEntities()[entity] > 0) { throw new Exception ("Entity already in filter."); }
-#endif
-                            filter.AddEntity(entity);
-                        }
-                    }
-                }
-            }
-        }
-
-        bool IsMaskCompatible(ComponentMask filterMask, int entity)
-        {
-            for (int i = 0, iMax = filterMask.IncludeCount; i < iMax; i++)
-            {
-                if (!_componentPools[filterMask.Include[i]].HasComp(entity))
-                {
-                    return false;
-                }
-            }
-            for (int i = 0, iMax = filterMask.ExcludeCount; i < iMax; i++)
-            {
-                if (_componentPools[filterMask.Exclude[i]].HasComp(entity))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        bool IsMaskCompatibleWithout(ComponentMask filterMask, int entity, int componentId)
-        {
-            for (int i = 0, iMax = filterMask.IncludeCount; i < iMax; i++)
-            {
-                var typeId = filterMask.Include[i];
-                if (typeId == componentId || !_componentPools[typeId].HasComp(entity))
-                {
-                    return false;
-                }
-            }
-            for (int i = 0, iMax = filterMask.ExcludeCount; i < iMax; i++)
-            {
-                var typeId = filterMask.Exclude[i];
-                if (typeId != componentId && _componentPools[typeId].HasComp(entity))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        public class Config
-        {
-            public int defaultEntityCount = 512;
-            public int defaultPoolCount = 512;
-            public int defaultFilterCount = 512;
-            public int defaultPoolDenseCount = 512;
-        }
-
-        internal struct EntityData
-        {
-            public string name;
-            public int version;
-            public int componentCount;
+            return filter;
         }
     }
 }

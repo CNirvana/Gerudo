@@ -1,29 +1,21 @@
-namespace Gerudo.ECS
+namespace Gerudo
 {
-    public interface IEcsSystem { }
-
-    public interface IPreInitSystem : IEcsSystem
+    public interface ISystem
     {
-        void PreInit(SystemManager systems);
     }
 
-    public interface IInitSystem : IEcsSystem
+    public interface IInitSystem : ISystem
     {
-        void Init(SystemManager systems);
+        void Init(World world);
     }
 
-    public interface IUpdateSystem : IEcsSystem
+    public interface IUpdateSystem : ISystem
     {
-        void Update(SystemManager systems);
+        void Update(World world, float deltaTime);
     }
 
-    public interface IDestroySystem : IEcsSystem
+    public interface IDestroySystem : ISystem
     {
-        void Destroy(SystemManager systems);
-    }
-
-    public interface IPostDestroySystem : IEcsSystem
-    {
-        void PostDestroy(SystemManager systems);
+        void Destroy(World world);
     }
 }

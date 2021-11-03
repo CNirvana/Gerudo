@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Veldrid;
 using Veldrid.StartupUtilities;
 
@@ -11,17 +10,15 @@ namespace Gerudo
 
         public Window Window { get; private set; }
 
-        public RenderSystem RenderSystem { get; private set; }
+        public RenderManager RenderManager { get; private set; }
 
-        public AssetManagementSystem AssetManagementSystem { get; private set; }
+        public AssetManager AssetManager { get; private set; }
 
         public Scene Scene { get; private set; }
 
-        private List<ISubModule> _subModules = new List<ISubModule>();
-
         private bool _isRunning;
 
-        private void Startup()
+        private bool Startup()
         {
             Instance = this;
 
@@ -38,19 +35,32 @@ namespace Gerudo
             };
             Window = new Window(windowCI);
 
-            InitializeSubModules();
-
-            foreach (var subModule in _subModules)
+            AssetManager = new AssetManager();
+            if (!AssetManager.Startup())
             {
-                subModule.Startup();
+                Logger.LogError("Failed to initialize asset manager!");
+            }
+
+            RenderManager = new RenderManager();
+            if (!RenderManager.Startup(Window))
+            {
+                Logger.LogError("Failed to initialize render manager!");
+                return false;
             }
 
             Scene = new Scene();
+
+            return true;
         }
 
         public void Run()
         {
-            Startup();
+            if (!Startup())
+            {
+                Logger.LogError("Engine could not initialize successfully!");
+                Shutdown();
+                return;
+            }
 
             Initialize();
 
@@ -72,9 +82,9 @@ namespace Gerudo
 
                     Update(deltaTime);
 
-                    RenderSystem.Render(Scene);
-
+                    RenderManager.ProcessInput(deltaTime, inputSnapshot);
                     OnGUI();
+                    RenderManager.Render(Scene);
 
                     if (_isRunning == false)
                     {
@@ -90,10 +100,8 @@ namespace Gerudo
 
         private void Shutdown()
         {
-            for (int i = _subModules.Count - 1; i >= 0; --i)
-            {
-                _subModules[i].Shutdown();
-            }
+            RenderManager.Shutdown();
+            AssetManager.Shutdown();
 
             Logger.Shutdown();
         }
@@ -114,25 +122,6 @@ namespace Gerudo
         protected virtual void Cleanup()
         {
 
-        }
-
-        private void InitializeSubModules()
-        {
-            GraphicsDeviceOptions options = new GraphicsDeviceOptions
-            {
-                Debug = true,
-                PreferStandardClipSpaceYDirection = true,
-                PreferDepthRangeZeroToOne = true,
-                SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-                ResourceBindingModel = ResourceBindingModel.Improved
-            };
-            GraphicsDevice device = VeldridStartup.CreateGraphicsDevice(Window.NativeWindow, options, GraphicsBackend.Vulkan);
-            RenderSystem = new RenderSystem(device);
-
-            AssetManagementSystem = new AssetManagementSystem();
-
-            _subModules.Add(RenderSystem);
-            _subModules.Add(AssetManagementSystem);
         }
 
         protected void Exit()

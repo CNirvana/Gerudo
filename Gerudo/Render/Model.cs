@@ -7,6 +7,8 @@ namespace Gerudo
     {
         public List<Mesh> meshes = new List<Mesh>();
 
+        public List<Animation> animations = new List<Animation>();
+
         public void Dispose()
         {
             foreach (var mesh in meshes)

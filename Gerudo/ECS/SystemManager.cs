@@ -1,105 +1,70 @@
+using System;
 using System.Collections.Generic;
 
-namespace Gerudo.ECS
+namespace Gerudo
 {
-    public sealed class SystemManager
+    public class SystemManager
     {
-        private readonly World _defaultWorld;
+        private List<ISystem> _allSystems = new List<ISystem>();
 
-        private readonly Dictionary<string, World> _worlds;
+        private List<IInitSystem> _initSystems = new List<IInitSystem>();
 
-        private readonly List<IEcsSystem> _allSystems;
+        private List<IUpdateSystem> _updateSystems = new List<IUpdateSystem>();
 
-        private readonly List<IUpdateSystem> _updateSystems;
+        private List<IDestroySystem> _destroySystems = new List<IDestroySystem>();
 
-        public SystemManager(World defaultWorld)
+        public SystemManager()
         {
-            _defaultWorld = defaultWorld;
-            _worlds = new Dictionary<string, World>(32);
-            _allSystems = new List<IEcsSystem>(128);
-            _updateSystems = new List<IUpdateSystem>(128);
-        }
-
-        public World GetWorld (string name = null)
-        {
-            if (name == null)
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            foreach (var assembly in assemblies)
             {
-                return _defaultWorld;
-            }
-
-            _worlds.TryGetValue (name, out var world);
-
-            return world;
-        }
-
-        public void Destroy()
-        {
-            for (var i = _allSystems.Count - 1; i >= 0; i--)
-            {
-                if (_allSystems[i] is IDestroySystem destroySystem)
+                var types = assembly.GetTypes();
+                foreach (var type in types)
                 {
-                    destroySystem.Destroy (this);
-                }
-            }
+                    if (!type.IsInterface && typeof(ISystem).IsAssignableFrom(type))
+                    {
+                        _allSystems.Add((ISystem)Activator.CreateInstance(type));
 
-            for (var i = _allSystems.Count - 1; i >= 0; i--)
-            {
-                if (_allSystems[i] is IPostDestroySystem postDestroySystem)
-                {
-                    postDestroySystem.PostDestroy (this);
-                }
-            }
+                        if (typeof(IInitSystem).IsAssignableFrom(type))
+                        {
+                            _initSystems.Add((IInitSystem)Activator.CreateInstance(type));
+                        }
 
-            _allSystems.Clear ();
-            _updateSystems.Clear();
-        }
+                        if (typeof(IUpdateSystem).IsAssignableFrom(type))
+                        {
+                            _updateSystems.Add((IUpdateSystem)Activator.CreateInstance(type));
+                        }
 
-        public SystemManager AddWorld(World world, string name)
-        {
-            _worlds[name] = world;
-            return this;
-        }
-
-        public SystemManager Add(IEcsSystem system)
-        {
-            _allSystems.Add(system);
-            if (system is IUpdateSystem updateSystem)
-            {
-                _updateSystems.Add(updateSystem);
-            }
-            return this;
-        }
-
-        public void Init()
-        {
-            foreach (var system in _allSystems)
-            {
-                if (system is IPreInitSystem initSystem)
-                {
-                    initSystem.PreInit (this);
-                }
-            }
-
-            var runIdx = 0;
-            foreach (var system in _allSystems)
-            {
-                if (system is IInitSystem initSystem)
-                {
-                    initSystem.Init (this);
-                }
-
-                if (system is IUpdateSystem runSystem)
-                {
-                    _updateSystems[runIdx++] = runSystem;
+                        if (typeof(IDestroySystem).IsAssignableFrom(type))
+                        {
+                            _destroySystems.Add((IDestroySystem)Activator.CreateInstance(type));
+                        }
+                    }
                 }
             }
         }
 
-        public void Update()
+        public void Initialize(World world)
         {
-            foreach (var updateSystem in _updateSystems)
+            foreach (var system in _initSystems)
             {
-                updateSystem.Update(this);
+                system.Init(world);
+            }
+        }
+
+        public void Update(World world, float deltaTime)
+        {
+            foreach (var system in _updateSystems)
+            {
+                system.Update(world, deltaTime);
+            }
+        }
+
+        public void Destroy(World world)
+        {
+            foreach (var system in _destroySystems)
+            {
+                system.Destroy(world);
             }
         }
     }

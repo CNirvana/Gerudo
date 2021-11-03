@@ -1,6 +1,6 @@
 using System.Numerics;
 using Gerudo;
-using Gerudo.ECS;
+using ImGuiNET;
 using Veldrid;
 
 namespace Sandbox
@@ -17,44 +17,45 @@ namespace Sandbox
 
         private float _pitch;
 
-        private World _world;
+        private SkeletalMesh _mesh;
 
-        private SystemManager _systemManager;
+        private Animator _animator;
 
         protected override void Initialize()
         {
-            var model = AssetManager.LoadAsset<Model>("Assets/Drone/Drone.fbx");
-            var texture = AssetManager.LoadAsset<Texture2D>("Assets/Drone/Drone_diff.jpg");
+            var model = AssetDatabase.LoadAsset<Model>("Assets/vampire/dancing_vampire.dae");
+            var texture = AssetDatabase.LoadAsset<Texture2D>("Assets/vampire/textures/Vampire_diffuse.png");
 
             var renderer = new Renderer
             {
                 Model = model,
                 //Mesh = mesh,
-                Transform = new Transform() { Scale = Vector3.One * 0.01f},
+                Transform = new Transform() { Scale = Vector3.One * 0.0001f},
                 Material = new Material(texture)
             };
+
+            _mesh = model.meshes[0] as SkeletalMesh;
+            _animator = new Animator(_mesh.Skeleton);
+            _animator.Play(model.animations[0]);
 
             Scene.AddRenderer(renderer);
 
-            var quadModel = new Model();
-            quadModel.meshes.Add(CreateQuad());
-            var quadRenderer = new Renderer
-            {
-                Model = quadModel,
-                Transform = new Transform() { Position = Vector3.UnitX * 5f },
-                Material = new Material(texture)
-            };
+            // var quadModel = new Model();
+            // quadModel.meshes.Add(CreateQuad());
+            // var quadRenderer = new Renderer
+            // {
+            //     Model = quadModel,
+            //     Transform = new Transform() { Position = Vector3.UnitX * 5f },
+            //     Material = new Material(texture)
+            // };
 
-            Scene.AddRenderer(quadRenderer);
-
-            _world = new World();
-            _systemManager = new SystemManager(_world);
-            _systemManager.Add(new UpdateSystem()).Init();
+            // Scene.AddRenderer(quadRenderer);
         }
 
         protected override void Update(float deltaTime)
         {
-            _systemManager.Update();
+            _animator.Update(deltaTime);
+            _mesh.boneTransformationData = _animator.GetBoneTransformationData();
 
             var camera = Scene.Camera;
 
@@ -114,23 +115,27 @@ namespace Sandbox
 
         protected override void OnGUI()
         {
+            ImGui.StyleColorsClassic();
+            if (ImGui.BeginMainMenuBar())
+            {
+                if (ImGui.BeginMenu("File"))
+                {
+                    if (ImGui.MenuItem("Open"))
+                    {
+                        
+                    }
+                    ImGui.EndMenu();
+                }
+                ImGui.EndMainMenuBar();
+            }
         }
 
         protected override void Cleanup()
         {
-            if (_systemManager != null)
-            {
-                _systemManager.Destroy();
-                _systemManager = null;
-            }
-            if (_world != null)
-            {
-                _world.Destroy();
-                _world = null;
-            }
+
         }
 
-        private Mesh CreateQuad()
+        private StaticMesh CreateQuad()
         {
             Vertex[] vertices = new Vertex[]
             {
@@ -141,35 +146,7 @@ namespace Sandbox
             };
             ushort[] indices = { 0, 2, 1, 2, 3, 1 };
 
-            return Mesh.Create(vertices, indices);
-        }
-
-        struct TagComponent :IComponent
-        {
-        }
-
-        class UpdateSystem : IInitSystem, IUpdateSystem, IDestroySystem
-        {
-            public void Init(SystemManager systems)
-            {
-                var world = systems.GetWorld();
-                var entity = world.CreateEntity();
-                entity.AddComp<TagComponent>();
-            }
-
-            public void Update(SystemManager systems)
-            {
-                var world = systems.GetWorld();
-                var filter = world.Filter<TagComponent>().End();
-
-                foreach (var entity in filter)
-                {
-                }
-            }
-
-            public void Destroy(SystemManager systems)
-            {
-            }
+            return StaticMesh.Create(vertices, indices);
         }
     }
 }
