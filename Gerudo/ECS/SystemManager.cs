@@ -23,21 +23,22 @@ namespace Gerudo
                 {
                     if (!type.IsInterface && typeof(ISystem).IsAssignableFrom(type))
                     {
-                        _allSystems.Add((ISystem)Activator.CreateInstance(type));
+                        var system = (ISystem)Activator.CreateInstance(type);
 
+                        _allSystems.Add(system);
                         if (typeof(IInitSystem).IsAssignableFrom(type))
                         {
-                            _initSystems.Add((IInitSystem)Activator.CreateInstance(type));
+                            _initSystems.Add((IInitSystem)system);
                         }
 
                         if (typeof(IUpdateSystem).IsAssignableFrom(type))
                         {
-                            _updateSystems.Add((IUpdateSystem)Activator.CreateInstance(type));
+                            _updateSystems.Add((IUpdateSystem)system);
                         }
 
                         if (typeof(IDestroySystem).IsAssignableFrom(type))
                         {
-                            _destroySystems.Add((IDestroySystem)Activator.CreateInstance(type));
+                            _destroySystems.Add((IDestroySystem)system);
                         }
                     }
                 }

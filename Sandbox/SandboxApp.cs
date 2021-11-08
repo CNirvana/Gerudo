@@ -21,6 +21,8 @@ namespace Sandbox
 
         private Animator _animator;
 
+        private World _world;
+
         protected override void Initialize()
         {
             var model = AssetDatabase.LoadAsset<Model>("Assets/vampire/dancing_vampire.dae");
@@ -50,6 +52,9 @@ namespace Sandbox
             // };
 
             // Scene.AddRenderer(quadRenderer);
+
+            _world = new World(new WorldConfig());
+            _world.Initialize();
         }
 
         protected override void Update(float deltaTime)
@@ -107,6 +112,8 @@ namespace Sandbox
 
             camera.Transform.Position = position;
 
+            _world.Update(deltaTime);
+
             if (Input.Keyboard.GetKeyDown(Key.Escape))
             {
                 Exit();
@@ -132,7 +139,7 @@ namespace Sandbox
 
         protected override void Cleanup()
         {
-
+            _world.Destroy();
         }
 
         private StaticMesh CreateQuad()
@@ -147,6 +154,31 @@ namespace Sandbox
             ushort[] indices = { 0, 2, 1, 2, 3, 1 };
 
             return StaticMesh.Create(vertices, indices);
+        }
+
+        public struct WeaponComp : IComponent
+        {
+            public int ammo;
+        }
+
+        public class WeaponUpdateSystem : IInitSystem, IUpdateSystem
+        {
+            private EntityMask _mask;
+
+            public void Init(World world)
+            {
+                _mask = new EntityMask().Include<WeaponComp>();
+            }
+
+            public void Update(World world, float deltaTime)
+            {
+                var filter = world.GetFilter(_mask);
+                foreach (var entity in filter)
+                {
+                    ref var weapon = ref world.GetComp<WeaponComp>(entity);
+                    weapon.ammo++;
+                }
+            }
         }
     }
 }
